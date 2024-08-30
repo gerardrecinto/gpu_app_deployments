@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: pytorch-gpu-container
-        image: your-repo/pytorch-gpu:latest
+        image: gerardrecinto/pytorch-gpu:latest
         resources:
           limits:
             nvidia.com/gpu: 1
