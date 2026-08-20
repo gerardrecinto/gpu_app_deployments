@@ -1,0 +1,57 @@
+apiVersion: kubeflow.org/v1
+kind: PyTorchJob
+metadata:
+  name: pytorch-distributed
+  namespace: gpu-workloads
+spec:
+  pytorchReplicaSpecs:
+    Master:
+      replicas: 1
+      restartPolicy: OnFailure
+      template:
+        metadata:
+          labels:
+            app: pytorch-distributed
+        spec:
+          containers:
+            - name: pytorch
+              image: gerardrecinto/pytorch-gpu:latest
+              command: ["python3", "train.py"]
+              resources:
+                requests:
+                  cpu: "500m"
+                  memory: "2Gi"
+                  nvidia.com/gpu: "1"
+                limits:
+                  cpu: "2"
+                  memory: "8Gi"
+                  nvidia.com/gpu: "1"
+          tolerations:
+            - key: nvidia.com/gpu
+              operator: Exists
+              effect: NoSchedule
+    Worker:
+      replicas: 2
+      restartPolicy: OnFailure
+      template:
+        metadata:
+          labels:
+            app: pytorch-distributed
+        spec:
+          containers:
+            - name: pytorch
+              image: gerardrecinto/pytorch-gpu:latest
+              command: ["python3", "train.py"]
+              resources:
+                requests:
+                  cpu: "500m"
+                  memory: "2Gi"
+                  nvidia.com/gpu: "1"
+                limits:
+                  cpu: "2"
+                  memory: "8Gi"
+                  nvidia.com/gpu: "1"
+          tolerations:
+            - key: nvidia.com/gpu
+              operator: Exists
+              effect: NoSchedule
