@@ -3,9 +3,9 @@
 ![CI](https://github.com/gerardrecinto/gpu-ml-deployments/actions/workflows/ci.yml/badge.svg)
 ![Release](https://github.com/gerardrecinto/gpu-ml-deployments/actions/workflows/release.yml/badge.svg)
 ![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)
-![PyTorch](https://img.shields.io/badge/PyTorch-1.12%2B-EE4C2C?logo=pytorch&logoColor=white)
+![PyTorch](https://img.shields.io/badge/PyTorch-2.x-EE4C2C?logo=pytorch&logoColor=white)
 ![Kubernetes](https://img.shields.io/badge/Kubernetes-GPU%20Workloads-326CE5?logo=kubernetes&logoColor=white)
-![CUDA 11.4](https://img.shields.io/badge/CUDA-11.4-76B900?logo=nvidia&logoColor=white)
+![CUDA 12.1](https://img.shields.io/badge/CUDA-12.1-76B900?logo=nvidia&logoColor=white)
 ![License: MIT](https://img.shields.io/badge/License-MIT-22c55e)
 
 ![GPU App Deployments logo](docs/assets/logo.svg)
@@ -27,8 +27,10 @@ docker pull ghcr.io/gerardrecinto/gpu-ml-deployments:latest
 | File | Purpose |
 |---|---|
 | `train.py` | PyTorch training loop with argparse — runs on CUDA or CPU |
-| `Dockerfile` | CUDA 11.4 + cuDNN 8 image with pinned torch 1.12.1 |
+| `Dockerfile` | CUDA 12.1 + cuDNN 8 image, torch/torchvision installed from the cu121 wheel index |
+| `requirements-dev.txt` | CPU-only torch + pytest for local dev and CI (no CUDA needed) |
 | `pytorch-gpu-deployment.yaml` | K8s Deployment: `nvidia.com/gpu: 1` per pod, resource requests + limits |
+| `pytorch-distributed-job.yaml` | Kubeflow `PyTorchJob` for multi-node distributed training |
 | `pytorch_job.sh` | Slurm batch job script |
 | `gres.conf` / `slurm.conf` | Slurm GPU resource config |
 
@@ -67,7 +69,7 @@ sbatch pytorch_job.sh
 squeue -u $USER
 ```
 
-The `gres.conf` declares GPU resources per node. `slurm.conf` sets `GresTypes`.
+The `gres.conf` declares the GPU device files per node. `slurm.conf` sets the `Gres=gpu:2` count for that node — the two must agree on the number of GPUs.
 
 ## train.py flags
 
@@ -83,6 +85,27 @@ python train.py --seed 42 --output-model /models/run1.pt
 ```
 
 `--seed` sets `torch.manual_seed` and `random.seed` before training starts. `--output-model` writes the final state dict to the given path after training completes.
+
+## Local dev / tests
+
+```bash
+pip install -r requirements-dev.txt
+pytest -v
+```
+
+`requirements-dev.txt` installs CPU-only torch, so this works without a GPU or CUDA toolchain.
+
+## Multi-node distributed training
+
+`pytorch-distributed-job.yaml` runs `train.py` across multiple pods using the [Kubeflow Training Operator](https://github.com/kubeflow/training-operator)'s `PyTorchJob` CRD instead of the single `Deployment`:
+
+```bash
+kubectl apply -f pytorch-distributed-job.yaml
+kubectl get pytorchjobs -n gpu-workloads
+kubectl logs -f pytorch-distributed-master-0 -n gpu-workloads
+```
+
+Requires the Training Operator installed in the cluster (`kubectl apply -k "github.com/kubeflow/training-operator/manifests/overlays/standalone"`).
 
 ## CI/CD Pipeline
 
@@ -102,4 +125,4 @@ kubectl rollout restart deployment/pytorch-gpu-deployment -n gpu-workloads
 
 - `train.py` falls back to CPU automatically if no GPU is detected (`torch.cuda.is_available()`)
 - Each pod requests 1 GPU — you need at least 2 GPU nodes for `replicas: 2`
-- For multi-node distributed training, replace `pytorch-gpu-deployment.yaml` with a PyTorchJob using the `torch.distributed` launcher
+- For multi-node distributed training, use `pytorch-distributed-job.yaml` (see [Multi-node distributed training](#multi-node-distributed-training)) instead of `pytorch-gpu-deployment.yaml`

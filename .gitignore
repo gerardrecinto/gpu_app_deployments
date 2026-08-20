@@ -10,3 +10,4 @@ slurm-*.out
 *.out
 dist/
 build/
+.pytest_cache/
